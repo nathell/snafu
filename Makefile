@@ -1,4 +1,4 @@
-CXXFLAGS = -g -Os -fomit-frame-pointer -ffunction-sections -fdata-sections
+CXXFLAGS = -g -Os -Wall -fomit-frame-pointer -ffunction-sections -fdata-sections -std=c++11
 LDFLAGS  = -lX11 -Wl,--gc-sections
 
 all: snafu
@@ -8,6 +8,7 @@ snafu.o: snafu.cpp
 
 snafu: snafu.o
 	$(CXX) -o snafu snafu.o $(LDFLAGS)
+	strip snafu
 
 clean:
 	rm -f snafu snafu.o
