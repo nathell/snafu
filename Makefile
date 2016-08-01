@@ -1,5 +1,5 @@
 CXXFLAGS = -g -Os -Wall -fomit-frame-pointer -ffunction-sections -fdata-sections -std=c++11
-LDFLAGS  = -lX11 -Wl,--gc-sections
+LDFLAGS  = -lX11 -lXi -Wl,--gc-sections
 
 all: snafu
 

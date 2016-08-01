@@ -8,10 +8,12 @@
 #include <ctime>
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 #include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/extensions/XInput2.h>
 
 #define STRING_FILE "strings.dat"
 #define DATA_FILE "windows.dat"
@@ -22,26 +24,9 @@ using std::vector;
 using std::FILE;
 using std::fopen;
 
-class TitleGrabber
-{
-private:
-   Display *display;
+Display *display;
 
-public:
-   TitleGrabber(const char *name = 0) {
-      display = XOpenDisplay(name);
-      if (!display)
-         throw "Can't open display";
-   }
-
-   ~TitleGrabber() {
-      XCloseDisplay(display);
-   }
-
-   string *getActiveWindowTitle() const;
-};
-
-string *TitleGrabber::getActiveWindowTitle() const
+string *getActiveWindowTitle()
 {
    Atom actual_type;
    int actual_format;
@@ -76,6 +61,35 @@ err1:
    if (!result)
       result = new string("[bad window]");
    return result;
+}
+
+void select_events()
+{
+   XIEventMask evmasks[1];
+   unsigned char mask1[(XI_LASTEVENT + 7)/8];
+
+   int xi_opcode, event, error;
+
+   if (!XQueryExtension(display, "XInputExtension", &xi_opcode, &event, &error)) {
+      throw "xi2 not available";
+   }
+
+   memset(mask1, 0, sizeof(mask1));
+
+   /* select for button and key events from all master devices */
+   XISetMask(mask1, XI_ButtonPress);
+   XISetMask(mask1, XI_ButtonRelease);
+   XISetMask(mask1, XI_KeyPress);
+   XISetMask(mask1, XI_KeyRelease);
+   XISetMask(mask1, XI_Motion);
+
+   evmasks[0].deviceid = XIAllDevices;
+   evmasks[0].mask_len = sizeof(mask1);
+   evmasks[0].mask = mask1;
+
+   XISelectEvents(display, DefaultRootWindow(display), evmasks, 1);
+   XSync(display, False);
+   XFlush(display);
 }
 
 class StringSet {
@@ -187,12 +201,18 @@ void collect()
    StringSet set;
    set.load(STRING_FILE);
    FILE *f = fopen(DATA_FILE, "a+b");
+   select_events();
    try {
-      TitleGrabber grabber;
       time_t tm;
       Entry entry;
       while (goon) {
-         string *title = grabber.getActiveWindowTitle();
+         XEvent ev;
+         int have_event = 0;
+         while (XPending(display)) {
+            have_event = 1;
+            XNextEvent(display, &ev);
+         }
+         string *title = getActiveWindowTitle();
          ++samples[*title];
          ++count;
          if (*title != previous) {
@@ -201,11 +221,11 @@ void collect()
          }
          entry.str = set.intern(title);
          time(&tm);
-         entry.time = static_cast<int32_t>(tm);
+         entry.time = static_cast<int32_t>(tm) | (have_event << 31);
          fwrite(&entry, sizeof(entry), 1, f);
          fflush(f);
          set.save(STRING_FILE);
-         usleep(delay);
+         usleep(1000000);
       }
    } catch (const char *error) {
       std::cerr << error << std::endl;
@@ -265,9 +285,15 @@ int main()
    std::cout.setf(std::ios::internal, std::ios::adjustfield);
    std::cout.precision(3);
 
+   display = XOpenDisplay(0);
+   if (!display)
+      throw "Can't open display";
+
    signal(SIGQUIT, handler);
+   signal(SIGINT, handler);
    XSetErrorHandler(ignoreError);
    collect();
+   XCloseDisplay(display);
    showStatistics();
 }
 
