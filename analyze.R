@@ -5,7 +5,7 @@ read.snafu <- function(windows.file = "windows.dat", strings.file = "strings.dat
     f <- file(windows.file, "rb")
     f2 <- file(strings.file, "rb")
 
-    x <- readBin(f, integer(), n = file.info(windows.file)$size)
+    x <- readBin(f, integer(), n = file.info(windows.file)$size / 4)
     n <- length(x) / 2
     ns <- readBin(f2, integer())
     strings <- readBin(f2, "character", n = ns)
@@ -13,7 +13,7 @@ read.snafu <- function(windows.file = "windows.dat", strings.file = "strings.dat
     data.frame(
         timestamp = as.POSIXct(bitwAnd(x[2*(1:n) - 1], bitwShiftR(-1, 1)), origin="1970-01-01", tz="UTC"),
         activity = bitwShiftR(x[2*(1:n) - 1], 31) == 1,
-        window = subs[1 + x[2*(1:n)]])
+        window = strings[1 + x[2*(1:n)]])
 }
 
 categorize <- function(df) {
